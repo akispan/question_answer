@@ -44,7 +44,10 @@ def index():
 def register():
 	user = get_current_user()
 	if request.method == 'POST':
-		
+
+		if not request.form['name'] or not request.form['password'] or request.form['selection'] == 'Role':
+			return render_template('register.html', user=user, error='Try again. Missing values!')
+
 		db = get_db()
 
 		existing_user_cur = db.execute('select id from users where name = ?', [request.form['name']])
@@ -54,7 +57,11 @@ def register():
 			return render_template('register.html', user=user, error='User already exists!')
 
 		hashed_password = generate_password_hash(request.form['password'], method='sha256')
-		db.execute('insert into users (name, password, expert, admin) values (?, ?, ?, ?)', [request.form['name'], hashed_password, '0', '0'])
+
+		if request.form['selection'] == '1':
+			db.execute('insert into users (name, password, expert, admin) values (?, ?, ?, ?)', [request.form['name'], hashed_password, '0', '0'])
+		elif request.form['selection'] == '2':
+			db.execute('insert into users (name, password, expert, admin) values (?, ?, ?, ?)', [request.form['name'], hashed_password, '1', '0'])
 		db.commit()
 
 		session['user'] = request.form['name']
@@ -197,8 +204,20 @@ def promote(user_id):
 		return redirect(url_for('index'))
 
 	db = get_db()
-	db.execute('update users set expert = 1 where id = ?', [user_id])
-	db.commit()
+
+	existing_user_cur = db.execute('select expert, admin from users where id = ?', [user_id])
+	existing_user = existing_user_cur.fetchone()
+
+	if existing_user['admin'] == 1:
+		return redirect(url_for('users'))
+
+	if existing_user['expert'] == 1:
+		db.execute('update users set expert = 0 where id = ?', [user_id])
+		db.commit()
+
+	if existing_user['expert'] == 0:
+		db.execute('update users set expert = 1 where id = ?', [user_id])
+		db.commit()
 
 	return redirect(url_for('users'))
 
@@ -208,4 +227,4 @@ def logout():
 	return redirect(url_for('index')) 
 
 if __name__ == '__main__':
-	app.run(debug=True)
+	app.run()
